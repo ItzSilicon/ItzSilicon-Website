@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>認識OAuth、OpenAPI與網路安全</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'Noto Sans TC', 'sans-serif']
+          },
+          colors: {
+            midnight: '#0a192f',
+            cyanGlow: '#00d4ff',
+            neonGreen: '#39ff14',
+            danger: '#ff4d4d',
+            softText: '#e6f1ff'
+          },
+          boxShadow: {
+            glow: '0 0 24px rgba(0, 212, 255, 0.32)',
+            dangerGlow: '0 0 24px rgba(255, 77, 77, 0.24)'
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      background: #0a192f;
+      color: #e6f1ff;
+      font-family: Inter, 'Noto Sans TC', sans-serif;
+      overflow-x: hidden;
+    }
+
+    .bg-glow-container {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      background:
+        radial-gradient(circle at 15% 15%, rgba(0, 212, 255, 0.15), transparent 30%),
+        radial-gradient(circle at 85% 20%, rgba(57, 255, 20, 0.10), transparent 28%),
+        radial-gradient(circle at 70% 85%, rgba(255, 77, 77, 0.10), transparent 25%),
+        #0a192f;
+      background-attachment: fixed;
+    }
+
+    .scroll-reveal {
+      opacity: 0;
+      transform: translateY(30px);
+      transition: opacity 0.8s ease, transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .scroll-reveal.active {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .glass {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      box-shadow: 0 20px 80px rgba(0, 0, 0, 0.28);
+    }
+
+    .glass-card {
+      position: relative;
+      overflow: hidden;
+      transition: transform 260ms ease, border-color 260ms ease, box-shadow 260ms ease, background 260ms ease;
+    }
+
+    .glass-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.18), transparent 32%, rgba(0, 212, 255, 0.08));
+      opacity: 0;
+      transition: opacity 260ms ease;
+      pointer-events: none;
+    }
+
+    .glass-card:hover {
+      transform: translateY(-8px) scale(1.01);
+      border-color: rgba(0, 212, 255, 0.48);
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.38), 0 0 28px rgba(0, 212, 255, 0.28);
+      background: rgba(255, 255, 255, 0.115);
+    }
+
+    .glass-card:hover::before {
+      opacity: 1;
+    }
+
+    .section-title {
+      background: linear-gradient(90deg, #e6f1ff, #00d4ff, #39ff14);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .code-window {
+      background: linear-gradient(180deg, rgba(4, 14, 28, 0.96), rgba(10, 25, 47, 0.96));
+      border: 1px solid rgba(0, 212, 255, 0.25);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 30px rgba(0, 212, 255, 0.12);
+    }
+
+    .token-method { color: #ff4d4d; }
+    .token-url { color: #00d4ff; }
+    .token-key { color: #ffd166; }
+    .token-value { color: #39ff14; }
+    .token-note { color: #8aa6c1; }
+
+    .grid-pattern {
+      background-image:
+        linear-gradient(rgba(0, 212, 255, 0.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 212, 255, 0.08) 1px, transparent 1px);
+      background-size: 36px 36px;
+      mask-image: radial-gradient(circle, black, transparent 72%);
+    }
+
+    .timeline-spine {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: linear-gradient(180deg, rgba(0, 212, 255, 0.7), rgba(57, 255, 20, 0.7));
+      box-shadow: 0 0 18px rgba(0, 212, 255, 0.5);
+    }
+
+    @keyframes pulse-glow {
+      0%, 100% { box-shadow: 0 0 18px rgba(255, 77, 77, 0.25); }
+      50% { box-shadow: 0 0 42px rgba(255, 77, 77, 0.55); }
+    }
+
+    .pulse-glow {
+      animation: pulse-glow 2.5s ease-in-out infinite;
+    }
+
+    .demo-step {
+      transition: opacity 600ms ease, border-color 600ms ease, box-shadow 600ms ease, transform 600ms ease;
+    }
+
+    .demo-step.active {
+      opacity: 1;
+      border-color: rgba(0, 212, 255, 0.6);
+      box-shadow: 0 0 28px rgba(0, 212, 255, 0.4);
+      transform: translateY(-2px);
+    }
+  </style>
+</head>
+<body class="min-h-screen overflow-x-hidden">
+  <div class="bg-glow-container"></div>
+  <div class="fixed inset-0 grid-pattern opacity-50 pointer-events-none"></div>
+
+  <header class="sticky top-0 z-50 border-b border-white/10 bg-midnight/75 backdrop-blur-xl">
+    <nav class="mx-auto flex max-w-7xl items-center justify-between px-5 py-4">
+      <a href="#intro" class="text-xl font-black tracking-wide text-cyanGlow">OAuth 2.0 現代網頁授權深度解析</a>
+      <div class="hidden gap-6 text-sm font-medium text-slate-300 md:flex">
+        <a class="transition hover:text-cyanGlow" href="#intro">首頁引言</a>
+        <a class="transition hover:text-cyanGlow" href="#history">技術沿革</a>
+        <a class="transition hover:text-cyanGlow" href="#api-basics">API 基礎</a>
+        <a class="transition hover:text-cyanGlow" href="#roles">核心角色</a>
+        <a class="transition hover:text-cyanGlow" href="#flow">運作流程</a>
+        <a class="transition hover:text-cyanGlow" href="#openapi-decl">OpenAPI 宣告</a>
+        <a class="transition hover:text-cyanGlow" href="#security">安全性分析</a>
+        <a class="transition hover:text-cyanGlow" href="#resources">參考資源</a>
+      </div>
+    </nav>
+  </header>
+
+  <main class="relative z-10 mx-auto max-w-7xl px-5">
+
+    <section id="intro" class="scroll-reveal grid min-h-[88vh] items-center gap-10 py-16 lg:grid-cols-[1.08fr_0.92fr]">
+      <div>
+        <p class="mb-4 inline-flex rounded-full border border-cyanGlow/30 bg-cyanGlow/10 px-4 py-2 text-sm font-semibold text-cyanGlow shadow-glow">Cyber Security Final Report</p>
+        <h1 class="section-title text-5xl font-black leading-tight md:text-7xl">OAuth 2.0 現代網頁授權深度解析</h1>
+        <p class="mt-7 max-w-3xl text-lg leading-8 text-slate-300 md:text-xl">OAuth 2.0 是開放標準的授權框架，讓應用程式可以在不取得使用者密碼的情況下，安全地請求第三方服務的資料存取權限<sup><a href="#ref-2" id="cit-2" class="text-cyanGlow hover:text-neonGreen text-xs font-bold mx-0.5 transition-colors">[2]</a></sup><sup><a href="#ref-12" id="cit-12" class="text-cyanGlow hover:text-neonGreen text-xs font-bold mx-0.5 transition-colors">[12]</a></sup>。</p>
+        <div class="mt-8 flex flex-wrap gap-3">
+          <span class="rounded-full border border-white/10 bg-white/10 px-4 py-2 text-sm text-slate-200">Authorization</span>
+          <span class="rounded-full border border-white/10 bg-white/10 px-4 py-2 text-sm text-slate-200">Access Token</span>
+          <span class="rounded-full border border-white/10 bg-white/10 px-4 py-2 text-sm text-slate-200">Scopes</span>
+          <span class="rounded-full border border-white/10 bg-white/10 px-4 py-2 text-sm text-slate-200">PKCE</span>
+        </div>
+      </div>
+      <div class="glass glass-card rounded-3xl p-6">
+        <div class="rounded-2xl border border-cyanGlow/25 bg-midnight/70 p-6">
+          <div class="mb-5 flex items-center gap-2">
+            <span class="h-3 w-3 rounded-full bg-danger"></span>
+            <span class="h-3 w-3 rounded-full bg-yellow-300"></span>
+            <span class="h-3 w-3 rounded-full bg-neonGreen"></span>
+          </div>
+          <div class="space-y-5">
+            <div id="demo-step-1" class="demo-step glass rounded-2xl border border-white/10 p-5 opacity-40">
+              <p class="text-sm text-slate-400">使用者點擊</p>
+              <p class="mt-1 text-2xl font-bold text-softText">使用 Google 登入</p>
+            </div>
+            <div class="flex items-center justify-center text-cyanGlow">↓</div>
+            <div id="demo-step-2" class="demo-step glass rounded-2xl border border-white/10 p-5 opacity-40">
+              <p class="text-sm text-slate-400">授權伺服器核發</p>
+              <p class="mt-1 font-mono text-lg text-neonGreen"><code id="demo-token">access_token</code></p>
+            </div>
+            <div class="flex items-center justify-center text-cyanGlow">↓</div>
+            <div id="demo-step-3" class="demo-step glass rounded-2xl border border-white/10 p-5 opacity-40">
+              <p class="text-sm text-slate-400">第三方應用只能讀取</p>
+              <p class="mt-1 text-lg font-bold text-softText">email、profile 等指定 scope</p>
+            </div>
+          </div>
+          <button id="flow-demo-btn" type="button" class="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-cyanGlow/40 bg-cyanGlow/10 px-4 py-3 text-sm font-bold text-cyanGlow transition hover:bg-cyanGlow/20 hover:shadow-glow">
+            動態模擬授權流程
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <section id="history" class="scroll-reveal py-20">
+      <div class="mb-16 text-center">
+        <p class="text-sm font-bold uppercase tracking-[0.35em] text-cyanGlow">Evolution</p>
+        <h2 class="section-title mt-3 text-4xl font-black md:text-5xl">技術歷史沿革</h2>
+        <p class="mx-auto mt-5 max-w-3xl leading-8 text-slate-300">從「密碼共享」到「無密碼授權」，OAuth 經歷了從 2006 年的概念發想到 2012 年 Token 化框架的完整演進。</p>
+      </div>
+      <div class="relative mx-auto max-w-4xl">
+        <div class="timeline-spine left-4 md:left-1/2 md:-translate-x-1/2"></div>
+        <ol class="space-y-14">
+          <li class="relative flex flex-col gap-4 pl-12 md:pl-0 md:flex-row md:items-center">
+            <div class="absolute left-4 top-3 h-5 w-5 -translate-x-1/2 rounded-full bg-cyanGlow shadow-glow md:left-1/2"></div>
+            <div class="md:w-1/2 md:pr-10 md:text-right">
+              <span class="text-2xl font-black text-danger">2006</span>
+              <h3 class="mt-1 text-xl font-bold text-softText">密碼共享的困境</h3>
+            </div>
+            <div class="glass glass-card rounded-2xl p-5 md:w-1/2 md:pl-10">
+              <p class="leading-7 text-slate-300">第三方 App 若要存取 Gmail、Google 地圖等資源，必須取得使用者密碼，造成密碼洩漏風險與權限失控。</p>
+            </div>
+          </li>
+          <li class="relative flex flex-col gap-4 pl-12 md:pl-0 md:flex-row md:items-center">
+            <div class="absolute left-4 top-3 h-5 w-5 -translate-x-1/2 rounded-full bg-cyanGlow shadow-glow md:left-1/2"></div>
+            <div class="md:w-1/2 md:pr-10 md:text-right">
+              <span class="text-2xl font-black text-cyanGlow">2007</span>
+              <h3 class="mt-1 text-xl font-bold text-softText">OAuth Core 1.0 草案</h3>
+            </div>
+            <div class="glass glass-card rounded-2xl p-5 md:w-1/2 md:pl-10">
+              <p class="leading-7 text-slate-300">Blaine Cook、Larry Doolittle 等人組成開放社群，於 10 月 3 日發布 OAuth Core 1.0 最終草稿<sup><a href="#ref-3" id="cit-3" class="text-cyanGlow hover:text-neonGreen text-xs font-bold mx-0.5 transition-colors">[3]</a></sup>。</p>
+            </div>
+          </li>
+          <li class="relative flex flex-col gap-4 pl-12 md:pl-0 md:flex-row md:items-center">
+            <div class="absolute left-4 top-3 h-5 w-5 -translate-x-1/2 rounded-full bg-cyanGlow shadow-glow md:left-1/2"></div>
+            <div class="md:w-1/2 md:pr-10 md:text-right">
+              <span class="text-2xl font-black text-cyanGlow">2010</span>
+              <h3 class="mt-1 text-xl font-bold text-softText">RFC 5849</h3>
+            </div>
+            <div class="glass glass-card rounded-2xl p-5 md:w-1/2 md:pl-10">
+              <p class="leading-7 text-slate-300">OAuth 1.0 進入 IETF 標準化，成為業界共通的授權協議<sup><a href="#ref-3" id="cit-3b" class="text-cyanGlow hover:text-neonGreen text-xs font-bold mx-0.5 transition-colors">[3]</a></sup>。</p>
+            </div>
+          </li>
+          <li class="relative flex flex-col gap-4 pl-12 md:pl-0 md:flex-row md:items-center">
+            <div class="absolute left-4 top-3 h-5 w-5 -translate-x-1/2 rounded-full bg-neonGreen shadow-glow md:left-1/2"></div>
+            <div class="md:w-1/2 md:pr-10 md:text-right">
+              <span class="text-2xl font-black text-neonGreen">2012</span>
+              <h3 class="mt-1 text-xl font-bold text-softText">OAuth 2.0 (RFC 6749 / RFC 6750)</h3>
+            </div>
+            <div class="glass glass-card rounded-2xl p-5 md:w-1/2 md:pl-10">
+              <p class="leading-7 text-slate-300">發布更靈活、可擴展的 Token 授權框架，並明確定義 Bearer Token 使用規範。</p>
+            </div>
+          </li>
+          <li class="relative flex flex-col gap-4 pl-12 md:pl-0 md:flex-row md:items-center">
+            <div class="absolute left-4 top-3 h-5 w-5 -translate-x-1/2 rounded-full bg-neonGreen shadow-glow md:left-1/2"></div>
+            <div class="md:w-1/2 md:pr-10 md:text-right">
+              <span class="text-2xl font-black text-neonGreen">2013+</span>
+              <h3 class="mt-1 text-xl font-bold text-softText">威脅模型與 OAuth 2.1</h3>
+            </div>
+            <div class="glass glass-card rounded-2xl p-5 md:w-1/2 md:pl-10">
+              <p class="leading-7 text-slate-300">IETF 發布威脅模型，王景提出 Covert Redirect 變體；OAuth 2.1 簡化並淘汰 implicit 等不安全流程。</p>
+            </div>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <section id="api-basics" class="scroll-reveal py-20">
+      <div class="mb-12 text-center">
+        <p class="text-sm font-bold uppercase tracking-[0.35em] text-cyanGlow">Foundation</p>
+        <h2 class="section-title mt-3 text-4xl font-black md:text-5xl">API 與 OpenAPI 基礎</h2>
+        <p class="mx-auto mt-5 max-w-3xl leading-8 text-slate-300">理解 OAuth 之前，必須先掌握 API 與 OpenAPI：前者是應用程式之間的介面，後者讓 API 變得機器可讀。</p>
+      </div>
+      <div class="grid gap-8 md:grid-cols-2">
+        <article class="glass glass-card rounded-3xl p-8">
+          <p class="mb-3 text-sm font-bold uppercase tracking-[0.3em] text-cyanGlow">API</p>
+          <h3 class="text-2xl font-bold text-softText">API 的抽象化價值</h3>
+          <p class="mt-4 leading-8 text-slate-300">API（Application Programming Interface）是軟體元件、應用程式或服務之間溝通的規則與工具集合<sup><a href="#ref-9" id="cit-9" class="text-cyanGlow hover:text-neonGreen text-xs font-bold mx-0.5 transition-colors">[9]</a></sup>。它抽象化了底層實作，讓開發者能透過簡潔介面使用強大功能，例如在金融場景中常見的開放銀行 (Open Banking) 資料交換<sup><a href="#ref-13" id="cit-13" class="text-cyanGlow hover:text-neonGreen text-xs font-bold mx-0.5 transition-colors">[13]</a></sup>。</p>
+          <div class="mt-6 overflow-hidden rounded-2xl border border-white/10">
+            <img src="images/third-party-login.png" alt="第三方登入流程圖" class="w-full">
+          </div>
+          <ul class="mt-5 space-y-2 text-sm leading-7 text-slate-300">
+            <li><span class="font-semibold text-cyanGlow">瀏覽器內建 API：</span>DOM、Fetch、Canvas、IndexedDB。</li>
+            <li><span class="font-semibold text-cyanGlow">第三方 API：</span>Google Maps、Facebook、PayPal 等。</li>
+            <li><span class="font-semibold text-cyanGlow">資料存取 API：</span>LocalStorage、IndexedDB 離線儲存。</li>
+          </ul>
+        </article>
+        <article class="glass glass-card rounded-3xl p-8">
+          <p class="mb-3 text-sm font-bold uppercase tracking-[0.3em] text-neonGreen">OpenAPI</p>
+          <h3 class="mt-4 text-xl font-bold text-softText">OpenAPI Specification (OAS)</h3>
+          <p class="mt-4 leading-8 text-slate-300">OpenAPI 是一種機器可讀的 API 描述規格<sup><a href="#ref-4" id="cit-4" class="text-cyanGlow hover:text-neonGreen text-xs font-bold mx-0.5 transition-colors">[4]</a></sup>，使用 YAML 或 JSON 標準化定義端點、HTTP 方法、參數、請求與回應格式、安全機制等細節<sup><a href="#ref-5" id="cit-5" class="text-cyanGlow hover:text-neonGreen text-xs font-bold mx-0.5 transition-colors">[5]</a></sup><sup><a href="#ref-7" id="cit-7" class="text-cyanGlow hover:text-neonGreen text-xs font-bold mx-0.5 transition-colors">[7]</a></sup>。</p>
+          <div class="mt-6 flex justify-center">
+            <img src="images/openapi-logo.png" alt="OpenAPI 標誌" class="h-20 w-auto rounded-xl border border-white/10 bg-white/5 p-3 shadow-glow">
+          </div>
+          <ul class="mt-5 space-y-2 text-sm leading-7 text-slate-300">
+            <li><span class="font-semibold text-neonGreen">標準化：</span>語言無關，適用任何技術堆疊。</li>
+            <li><span class="font-semibold text-neonGreen">自動化：</span>Swagger UI、OpenAPI Generator 自動生成文件與 SDK。</li>
+            <li><span class="font-semibold text-neonGreen">維護：</span>由 OpenAPI Initiative 管理，最新版本 3.1.0。</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section id="roles" class="scroll-reveal py-20">
+      <div class="mb-12 text-center">
+        <p class="text-sm font-bold uppercase tracking-[0.35em] text-cyanGlow">Core Roles</p>
+        <h2 class="section-title mt-3 text-4xl font-black md:text-5xl">OAuth 核心角色</h2>
+        <p class="mx-auto mt-5 max-w-3xl leading-8 text-slate-300">OAuth 2.0 定義了四個互動角色，授權流程即是這四者在授權伺服器中協作的結果<sup><a href="#ref-15" id="cit-15" class="text-cyanGlow hover:text-neonGreen text-xs font-bold mx-0.5 transition-colors">[15]</a></sup>。</p>
+      </div>
+      <div class="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
+        <article class="glass glass-card rounded-3xl p-6">
+          <p class="mb-4 text-4xl font-black text-danger">01</p>
+          <h3 class="text-2xl font-bold text-cyanGlow">Resource Owner</h3>
+          <p class="mt-2 font-semibold text-softText">資源擁有者</p>
+          <p class="mt-4 leading-7 text-slate-300">通常是使用者本人，擁有資料並決定是否授權第三方應用程式存取。</p>
+        </article>
+        <article class="glass glass-card rounded-3xl p-6">
+          <p class="mb-4 text-4xl font-black text-cyanGlow">02</p>
+          <h3 class="text-2xl font-bold text-cyanGlow">Client</h3>
+          <p class="mt-2 font-semibold text-softText">客戶端應用程式</p>
+          <p class="mt-4 leading-7 text-slate-300">想要存取使用者資料的第三方服務，例如支援「用 Google 登入」的網站或 App。</p>
+        </article>
+        <article class="glass glass-card rounded-3xl p-6">
+          <p class="mb-4 text-4xl font-black text-neonGreen">03</p>
+          <h3 class="text-2xl font-bold text-cyanGlow">Authorization Server</h3>
+          <p class="mt-2 font-semibold text-softText">授權伺服器</p>
+          <p class="mt-4 leading-7 text-slate-300">負責驗證使用者、取得同意，並核發 Authorization Code 或 Access Token。</p>
+        </article>
+        <article class="glass glass-card rounded-3xl p-6">
+          <p class="mb-4 text-4xl font-black text-yellow-300">04</p>
+          <h3 class="text-2xl font-bold text-cyanGlow">Resource Server</h3>
+          <p class="mt-2 font-semibold text-softText">資源伺服器</p>
+          <p class="mt-4 leading-7 text-slate-300">保存受保護資料的 API 伺服器，會檢查 Access Token 有效性後才回傳資料。</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="flow" class="scroll-reveal py-20">
+      <div class="mb-12 text-center">
+        <p class="text-sm font-bold uppercase tracking-[0.35em] text-neonGreen">Authorization Flow</p>
+        <h2 class="section-title mt-3 text-4xl font-black md:text-5xl">授權運作流程</h2>
+        <p class="mx-auto mt-5 max-w-3xl leading-8 text-slate-300">流程重點是「密碼不交給第三方」，Client 取得的是可限制範圍與期限的 Token<sup><a href="#ref-1" id="cit-1" class="text-cyanGlow hover:text-neonGreen text-xs font-bold mx-0.5 transition-colors">[1]</a></sup><sup><a href="#ref-2" id="cit-2b" class="text-cyanGlow hover:text-neonGreen text-xs font-bold mx-0.5 transition-colors">[2]</a></sup>。</p>
+      </div>
+      <div class="glass rounded-3xl p-5 md:p-8">
+        <div class="mermaid rounded-2xl bg-midnight/60 p-4 text-sm">
+flowchart LR
+  U[Resource Owner<br/>使用者] -->|1 點擊第三方登入| C[Client<br/>第三方應用]
+  C -->|2 重新導向授權請求| A[Authorization Server<br/>授權伺服器]
+  U -->|3 登入並同意 Scope| A
+  A -->|4 回傳 Authorization Code| C
+  C -->|5 用 Code 換 Access Token| A
+  C -->|6 帶 Token 呼叫 API| R[Resource Server<br/>資源伺服器]
+  R -->|7 驗證 Token 並回傳資料| C
+  C -->|8 顯示登入結果| U
+  classDef user fill:#ff4d4d,stroke:#ffb3b3,color:#0a192f,stroke-width:2px
+  classDef client fill:#00d4ff,stroke:#b8f3ff,color:#0a192f,stroke-width:2px
+  classDef auth fill:#39ff14,stroke:#c8ffc0,color:#0a192f,stroke-width:2px
+  classDef resource fill:#ffd166,stroke:#fff1bf,color:#0a192f,stroke-width:2px
+  class U user
+  class C client
+  class A auth
+  class R resource
+        </div>
+        <figure class="mt-8 overflow-hidden rounded-2xl border border-white/10 glass-card p-3">
+          <img src="images/oauth-flow.png" alt="OAuth 運作流程示意圖" class="w-full rounded-xl">
+          <figcaption class="mt-3 px-2 text-center text-xs text-slate-400">OAuth 2.0 運作流程示意圖<sup><a href="#ref-1" id="cit-1b" class="text-cyanGlow hover:text-neonGreen text-xs font-bold mx-0.5 transition-colors">[1]</a></sup></figcaption>
+        </figure>
+      </div>
+      <div class="mt-8 grid gap-5 md:grid-cols-4">
+        <div class="glass glass-card rounded-2xl p-5">
+          <h3 class="font-bold text-cyanGlow">Token 取代密碼</h3>
+          <p class="mt-2 text-sm leading-6 text-slate-300">第三方應用不需要知道使用者密碼。</p>
+        </div>
+        <div class="glass glass-card rounded-2xl p-5">
+          <h3 class="font-bold text-cyanGlow">Scope 限制權限</h3>
+          <p class="mt-2 text-sm leading-6 text-slate-300">只允許存取必要資料，例如 email 或 profile。</p>
+        </div>
+        <div class="glass glass-card rounded-2xl p-5">
+          <h3 class="font-bold text-cyanGlow">Token 有效期限</h3>
+          <p class="mt-2 text-sm leading-6 text-slate-300">權杖可設定短效期以降低外洩風險。</p>
+        </div>
+        <div class="glass glass-card rounded-2xl p-5">
+          <h3 class="font-bold text-cyanGlow">授權可撤銷</h3>
+          <p class="mt-2 text-sm leading-6 text-slate-300">使用者可在帳號設定移除第三方授權。</p>
+        </div>
+      </div>
+
+      <div class="mt-10 grid gap-8 lg:grid-cols-2">
+        <div class="code-window rounded-3xl p-5">
+          <div class="mb-4 flex items-center gap-2">
+            <span class="h-3 w-3 rounded-full bg-danger"></span>
+            <span class="h-3 w-3 rounded-full bg-yellow-300"></span>
+            <span class="h-3 w-3 rounded-full bg-neonGreen"></span>
+          </div>
+          <h3 class="mb-4 text-xl font-bold text-cyanGlow">授權請求範例</h3>
+          <pre class="overflow-x-auto text-sm leading-7"><code><span class="token-method">GET</span> <span class="token-url">/authorize</span>?
+  <span class="token-key">response_type</span>=<span class="token-value">code</span>&
+  <span class="token-key">client_id</span>=<span class="token-value">CLIENT_ID</span>&
+  <span class="token-key">redirect_uri</span>=<span class="token-value">https://client.example/callback</span>&
+  <span class="token-key">scope</span>=<span class="token-value">profile email</span>&
+  <span class="token-key">state</span>=<span class="token-value">RANDOM_CSRF_TOKEN</span>&
+  <span class="token-key">code_challenge</span>=<span class="token-value">PKCE_CHALLENGE</span></code></pre>
+        </div>
+        <div class="code-window rounded-3xl p-5">
+          <div class="mb-4 flex items-center gap-2">
+            <span class="h-3 w-3 rounded-full bg-danger"></span>
+            <span class="h-3 w-3 rounded-full bg-yellow-300"></span>
+            <span class="h-3 w-3 rounded-full bg-neonGreen"></span>
+          </div>
+          <h3 class="mb-4 text-xl font-bold text-cyanGlow">API 呼叫範例</h3>
+          <pre class="overflow-x-auto text-sm leading-7"><code><span class="token-method">GET</span> <span class="token-url">/v1/me</span>
+<span class="token-key">Authorization</span>: <span class="token-value">Bearer ACCESS_TOKEN</span>
+
+<span class="token-note">回應資料只應包含授權 Scope 允許的欄位</span></code></pre>
+        </div>
+      </div>
+    </section>
+
+    <section id="openapi-decl" class="scroll-reveal py-20">
+      <div class="mb-12 text-center">
+        <p class="text-sm font-bold uppercase tracking-[0.35em] text-cyanGlow">OpenAPI x OAuth</p>
+        <h2 class="section-title mt-3 text-4xl font-black md:text-5xl">實務宣告：OpenAPI x OAuth 2.0</h2>
+        <p class="mx-auto mt-5 max-w-3xl leading-8 text-slate-300">OpenAPI 透過 <code>securitySchemes</code> 定義授權機制<sup><a href="#ref-4" id="cit-4b" class="text-cyanGlow hover:text-neonGreen text-xs font-bold mx-0.5 transition-colors">[4]</a></sup><sup><a href="#ref-6" id="cit-6" class="text-cyanGlow hover:text-neonGreen text-xs font-bold mx-0.5 transition-colors">[6]</a></sup>，打通前後端溝通<sup><a href="#ref-8" id="cit-8" class="text-cyanGlow hover:text-neonGreen text-xs font-bold mx-0.5 transition-colors">[8]</a></sup>，並在操作層級透過 <code>security</code> 宣告使用哪些 Scopes<sup><a href="#ref-10" id="cit-10" class="text-cyanGlow hover:text-neonGreen text-xs font-bold mx-0.5 transition-colors">[10]</a></sup><sup><a href="#ref-11" id="cit-11" class="text-cyanGlow hover:text-neonGreen text-xs font-bold mx-0.5 transition-colors">[11]</a></sup>。</p>
+      </div>
+      <div class="code-window rounded-3xl p-6">
+        <div class="mb-4 flex items-center gap-2">
+          <span class="h-3 w-3 rounded-full bg-danger"></span>
+          <span class="h-3 w-3 rounded-full bg-yellow-300"></span>
+          <span class="h-3 w-3 rounded-full bg-neonGreen"></span>
+          <span class="ml-2 text-sm text-slate-400">openapi-spec.yaml</span>
+        </div>
+        <pre class="overflow-x-auto text-sm leading-7"><code><span class="token-key">components</span>:
+  <span class="token-key">securitySchemes</span>:
+    <span class="token-key">OAuth2Flow</span>:
+      <span class="token-key">type</span>: <span class="token-value">oauth2</span>
+      <span class="token-key">flows</span>:
+        <span class="token-key">authorizationCode</span>:
+          <span class="token-key">authorizationUrl</span>: <span class="token-url">https://auth.example.com/oauth/authorize</span>
+          <span class="token-key">tokenUrl</span>: <span class="token-url">https://auth.example.com/oauth/token</span>
+          <span class="token-key">scopes</span>:
+            <span class="token-key">read:profile</span>: <span class="token-value">"讀取使用者公開資料"</span>
+
+<span class="token-key">security</span>:
+  - <span class="token-key">OAuth2Flow</span>:
+      - <span class="token-value">read:profile</span></code></pre>
+        <p class="mt-4 text-sm leading-7 text-slate-300">此宣告讓 Swagger UI、OpenAPI Generator 等工具自動產生可互動的授權按鈕、SDK 與安全測試流程。</p>
+      </div>
+    </section>
+
+    <section id="security" class="scroll-reveal py-20">
+      <div class="mb-12 text-center">
+        <p class="text-sm font-bold uppercase tracking-[0.35em] text-danger">Security Analysis</p>
+        <h2 class="section-title mt-3 text-4xl font-black md:text-5xl">安全性分析</h2>
+        <p class="mx-auto mt-5 max-w-3xl leading-8 text-slate-300">OAuth 框架本身設計嚴謹，但實作錯誤或使用者無意識授權，仍可能導致嚴重風險。</p>
+      </div>
+      <aside class="mb-10 rounded-3xl border border-danger/40 bg-danger/5 p-6 backdrop-blur shadow-dangerGlow pulse-glow md:p-8">
+        <div class="mb-4 flex flex-wrap items-center gap-3">
+          <span class="h-2 w-2 rounded-full bg-danger animate-pulse"></span>
+          <p class="text-xs font-bold uppercase tracking-[0.3em] text-danger">資安威脅情報 (Threat Intelligence)</p>
+        </div>
+        <h3 class="text-xl font-black text-danger md:text-2xl">當前 OAuth 攻擊已能繞過多因素驗證 (MFA)</h3>
+        <p class="mt-3 leading-8 text-slate-200">
+          根據資安實務統計，近年駭客開始大量利用<span class="font-bold text-danger">偽造的 OAuth 應用程式</span>來繞過多因素驗證 (MFA)，其
+          <span class="font-black text-danger">攻擊成功率已超過 50%</span>。
+          這使得針對<span class="font-bold text-cyanGlow">重定向網址劫持</span>的防範與
+          <span class="font-bold text-cyanGlow">PKCE 的部署</span>成為現代 Web 安全的重中之重。
+        </p>
+      </aside>
+      <div class="grid gap-8 lg:grid-cols-2">
+        <div class="space-y-5">
+          <h3 class="text-2xl font-black text-danger">常見攻擊與風險</h3>
+          <div class="glass glass-card rounded-2xl p-5 shadow-dangerGlow">
+            <h4 class="font-bold text-softText">偽造 OAuth 應用程式 (關鍵威脅)</h4>
+            <p class="mt-2 leading-7 text-slate-300">駭客偽裝成 Adobe、DocuSign 等合法服務誘騙使用者授權，研究顯示此攻擊繞過 MFA 成功率超過 50%<sup><a href="#ref-14" id="cit-14" class="text-cyanGlow hover:text-neonGreen text-xs font-bold mx-0.5 transition-colors">[14]</a></sup>，2025 年已影響逾 900 個 Microsoft 365 環境。</p>
+          </div>
+          <div class="glass glass-card rounded-2xl p-5 shadow-dangerGlow">
+            <h4 class="font-bold text-softText">CSRF 攻擊</h4>
+            <p class="mt-2 leading-7 text-slate-300">若未正確使用 <code>state</code> 參數，攻擊者可偽造授權請求，讓使用者無意中授權惡意應用。</p>
+          </div>
+          <div class="glass glass-card rounded-2xl p-5 shadow-dangerGlow">
+            <h4 class="font-bold text-softText">Token 洩漏</h4>
+            <p class="mt-2 leading-7 text-slate-300">Access Token 若放在 localStorage、未加密日誌或被 XSS 讀取，可能導致資料外洩。</p>
+          </div>
+          <div class="glass glass-card rounded-2xl p-5 shadow-dangerGlow">
+            <h4 class="font-bold text-softText">授權碼攔截</h4>
+            <p class="mt-2 leading-7 text-slate-300">公開客戶端若未使用 PKCE，攻擊者可能攔截 Authorization Code 並換取 Token。</p>
+          </div>
+          <div class="glass glass-card rounded-2xl p-5 shadow-dangerGlow">
+            <h4 class="font-bold text-softText">威脅模型 (Threat Model)</h4>
+            <p class="mt-2 leading-7 text-slate-300">IETF 系統性定義 OAuth 風險，開發者需依此模型評估應用安全。</p>
+          </div>
+        </div>
+        <div class="space-y-5">
+          <h3 class="text-2xl font-black text-neonGreen">防護最佳實務</h3>
+          <div class="glass glass-card rounded-2xl p-5">
+            <h4 class="font-bold text-softText">強制使用 PKCE</h4>
+            <p class="mt-2 leading-7 text-slate-300">SPA、行動 App 等公開客戶端應使用 PKCE 防止授權碼被攔截<sup><a href="#ref-16" id="cit-16" class="text-cyanGlow hover:text-neonGreen text-xs font-bold mx-0.5 transition-colors">[16]</a></sup><sup><a href="#ref-15" id="cit-15b" class="text-cyanGlow hover:text-neonGreen text-xs font-bold mx-0.5 transition-colors">[15]</a></sup>。</p>
+          </div>
+          <div class="glass glass-card rounded-2xl p-5">
+            <h4 class="font-bold text-softText">驗證 state 參數</h4>
+            <p class="mt-2 leading-7 text-slate-300"><code>state</code> 必須隨機、唯一且與使用者 Session 綁定，用於防範 CSRF。</p>
+          </div>
+          <div class="glass glass-card rounded-2xl p-5">
+            <h4 class="font-bold text-softText">安全儲存權杖</h4>
+            <p class="mt-2 leading-7 text-slate-300">Web 使用 HTTP-only、Secure Cookie；行動端使用 Keychain 或 Keystore。</p>
+          </div>
+          <div class="glass glass-card rounded-2xl p-5">
+            <h4 class="font-bold text-softText">最小權限原則</h4>
+            <p class="mt-2 leading-7 text-slate-300">只要求必要 Scope，並定期檢查、撤銷不再需要的第三方授權。</p>
+          </div>
+          <div class="glass glass-card rounded-2xl p-5">
+            <h4 class="font-bold text-softText">使用者警覺</h4>
+            <p class="mt-2 leading-7 text-slate-300">點擊「允許」前確認應用名稱與請求權限，警惕釣魚郵件。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="resources" class="scroll-reveal py-20">
+      <div class="mb-12 text-center">
+        <p class="text-sm font-bold uppercase tracking-[0.35em] text-cyanGlow">References</p>
+        <h2 class="section-title mt-3 text-4xl font-black md:text-5xl">參考資源</h2>
+        <p class="mx-auto mt-5 max-w-3xl leading-8 text-slate-300">以下為本報告所引用之文獻清單。點擊行內標註可平滑捲動至對應條目。</p>
+      </div>
+      <ol class="glass space-y-4 rounded-3xl p-6 text-slate-200 md:p-8">
+        <li id="ref-1" class="glass-card scroll-mt-28 flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/5 p-5 md:flex-row md:items-center md:justify-between">
+          <div>
+            <span class="mr-2 font-black text-cyanGlow">[1]</span>
+            <span class="font-bold text-softText">OpenID Connect vs OAuth2: The Differences and How to Choose</span>
+            <span class="text-slate-400"> — Darko Bozhinovski (2024), SuperTokens.</span>
+          </div>
+          <a class="inline-flex items-center justify-center rounded-xl border border-cyanGlow/40 bg-cyanGlow/10 px-3 py-1.5 text-xs font-bold text-cyanGlow transition hover:bg-cyanGlow/20 hover:shadow-glow" target="_blank" rel="noreferrer" href="https://supertokens.com/blog/openid-connect-vs-oauth2">瀏覽文獻 ↗</a>
+        </li>
+        <li id="ref-2" class="glass-card scroll-mt-28 flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/5 p-5 md:flex-row md:items-center md:justify-between">
+          <div>
+            <span class="mr-2 font-black text-cyanGlow">[2]</span>
+            <span class="font-bold text-softText">Introduction</span>
+            <span class="text-slate-400"> — OAuth.net (官方網站).</span>
+          </div>
+          <a class="inline-flex items-center justify-center rounded-xl border border-cyanGlow/40 bg-cyanGlow/10 px-3 py-1.5 text-xs font-bold text-cyanGlow transition hover:bg-cyanGlow/20 hover:shadow-glow" target="_blank" rel="noreferrer" href="https://oauth.net/about/introduction/">瀏覽文獻 ↗</a>
+        </li>
+        <li id="ref-3" class="glass-card scroll-mt-28 flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/5 p-5 md:flex-row md:items-center md:justify-between">
+          <div>
+            <span class="mr-2 font-black text-cyanGlow">[3]</span>
+            <span class="font-bold text-softText">OAuth</span>
+            <span class="text-slate-400"> — Wikipedia (英文版).</span>
+          </div>
+          <a class="inline-flex items-center justify-center rounded-xl border border-cyanGlow/40 bg-cyanGlow/10 px-3 py-1.5 text-xs font-bold text-cyanGlow transition hover:bg-cyanGlow/20 hover:shadow-glow" target="_blank" rel="noreferrer" href="https://en.wikipedia.org/wiki/OAuth">瀏覽文獻 ↗</a>
+        </li>
+        <li id="ref-4" class="glass-card scroll-mt-28 flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/5 p-5 md:flex-row md:items-center md:justify-between">
+          <div>
+            <span class="mr-2 font-black text-cyanGlow">[4]</span>
+            <span class="font-bold text-softText">OpenAPI 規格</span>
+            <span class="text-slate-400"> — 維基百科 (中文版).</span>
+          </div>
+          <a class="inline-flex items-center justify-center rounded-xl border border-cyanGlow/40 bg-cyanGlow/10 px-3 py-1.5 text-xs font-bold text-cyanGlow transition hover:bg-cyanGlow/20 hover:shadow-glow" target="_blank" rel="noreferrer" href="https://zh.wikipedia.org/zh-tw/OpenAPI%E8%A6%8F%E6%A0%BC">瀏覽文獻 ↗</a>
+        </li>
+        <li id="ref-5" class="glass-card scroll-mt-28 flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/5 p-5 md:flex-row md:items-center md:justify-between">
+          <div>
+            <span class="mr-2 font-black text-cyanGlow">[5]</span>
+            <span class="font-bold text-softText">什麼是 Open API？維持API一致性 七個規範點有這些</span>
+            <span class="text-slate-400"> — Pm雜學相談室 (2024), 104 學習.</span>
+          </div>
+          <a class="inline-flex items-center justify-center rounded-xl border border-cyanGlow/40 bg-cyanGlow/10 px-3 py-1.5 text-xs font-bold text-cyanGlow transition hover:bg-cyanGlow/20 hover:shadow-glow" target="_blank" rel="noreferrer" href="https://nabi.104.com.tw/posts/nabi_post_664ab178-9cc1-4ef7-a9d1-ee27c88f4fec">瀏覽文獻 ↗</a>
+        </li>
+        <li id="ref-6" class="glass-card scroll-mt-28 flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/5 p-5 md:flex-row md:items-center md:justify-between">
+          <div>
+            <span class="mr-2 font-black text-cyanGlow">[6]</span>
+            <span class="font-bold text-softText">什麼是 OpenAPI 規格？</span>
+            <span class="text-slate-400"> — Microsoft Learn.</span>
+          </div>
+          <a class="inline-flex items-center justify-center rounded-xl border border-cyanGlow/40 bg-cyanGlow/10 px-3 py-1.5 text-xs font-bold text-cyanGlow transition hover:bg-cyanGlow/20 hover:shadow-glow" target="_blank" rel="noreferrer" href="https://learn.microsoft.com/zh-tw/microsoft-cloud/dev/dev-proxy/concepts/what-is-openapi-spec">瀏覽文獻 ↗</a>
+        </li>
+        <li id="ref-7" class="glass-card scroll-mt-28 flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/5 p-5 md:flex-row md:items-center md:justify-between">
+          <div>
+            <span class="mr-2 font-black text-cyanGlow">[7]</span>
+            <span class="font-bold text-softText">Open API 是什麼？2026 年開放 API 與 OpenAPI 規範完整解析</span>
+            <span class="text-slate-400"> — CloudInsight (2026).</span>
+          </div>
+          <a class="inline-flex items-center justify-center rounded-xl border border-cyanGlow/40 bg-cyanGlow/10 px-3 py-1.5 text-xs font-bold text-cyanGlow transition hover:bg-cyanGlow/20 hover:shadow-glow" target="_blank" rel="noreferrer" href="https://cloudinsight.cc/zh/blog/what-is-open-api">瀏覽文獻 ↗</a>
+        </li>
+        <li id="ref-8" class="glass-card scroll-mt-28 flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/5 p-5 md:flex-row md:items-center md:justify-between">
+          <div>
+            <span class="mr-2 font-black text-cyanGlow">[8]</span>
+            <span class="font-bold text-softText">OpenAPI 打通前後端任督二脈</span>
+            <span class="text-slate-400"> — Leon (2022), 六小編 Editor.</span>
+          </div>
+          <a class="inline-flex items-center justify-center rounded-xl border border-cyanGlow/40 bg-cyanGlow/10 px-3 py-1.5 text-xs font-bold text-cyanGlow transition hover:bg-cyanGlow/20 hover:shadow-glow" target="_blank" rel="noreferrer" href="https://editor.leonh.space/2022/openapi/">瀏覽文獻 ↗</a>
+        </li>
+        <li id="ref-9" class="glass-card scroll-mt-28 flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/5 p-5 md:flex-row md:items-center md:justify-between">
+          <div>
+            <span class="mr-2 font-black text-cyanGlow">[9]</span>
+            <span class="font-bold text-softText">用戶端 Web API</span>
+            <span class="text-slate-400"> — Mozilla Developer Network (MDN Web Docs).</span>
+          </div>
+          <a class="inline-flex items-center justify-center rounded-xl border border-cyanGlow/40 bg-cyanGlow/10 px-3 py-1.5 text-xs font-bold text-cyanGlow transition hover:bg-cyanGlow/20 hover:shadow-glow" target="_blank" rel="noreferrer" href="https://developer.mozilla.org/zh-TW/docs/Learn/JavaScript/Client-side_web_APIs">瀏覽文獻 ↗</a>
+        </li>
+        <li id="ref-10" class="glass-card scroll-mt-28 flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/5 p-5 md:flex-row md:items-center md:justify-between">
+          <div>
+            <span class="mr-2 font-black text-cyanGlow">[10]</span>
+            <span class="font-bold text-softText">OAuth 2 in OpenAPI</span>
+            <span class="text-slate-400"> — Speakeasy Documentation (2026).</span>
+          </div>
+          <a class="inline-flex items-center justify-center rounded-xl border border-cyanGlow/40 bg-cyanGlow/10 px-3 py-1.5 text-xs font-bold text-cyanGlow transition hover:bg-cyanGlow/20 hover:shadow-glow" target="_blank" rel="noreferrer" href="https://www.speakeasy.com/openapi/security/security-schemes/security-oauth2">瀏覽文獻 ↗</a>
+        </li>
+        <li id="ref-11" class="glass-card scroll-mt-28 flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/5 p-5 md:flex-row md:items-center md:justify-between">
+          <div>
+            <span class="mr-2 font-black text-cyanGlow">[11]</span>
+            <span class="font-bold text-softText">Describing API Security</span>
+            <span class="text-slate-400"> — OpenAPI Initiative (2026).</span>
+          </div>
+          <a class="inline-flex items-center justify-center rounded-xl border border-cyanGlow/40 bg-cyanGlow/10 px-3 py-1.5 text-xs font-bold text-cyanGlow transition hover:bg-cyanGlow/20 hover:shadow-glow" target="_blank" rel="noreferrer" href="https://learn.openapis.org/specification/security.html">瀏覽文獻 ↗</a>
+        </li>
+        <li id="ref-12" class="glass-card scroll-mt-28 flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/5 p-5 md:flex-row md:items-center md:justify-between">
+          <div>
+            <span class="mr-2 font-black text-cyanGlow">[12]</span>
+            <span class="font-bold text-softText">OAuth 2.0 是什麼？第三方登入機制一次搞懂</span>
+            <span class="text-slate-400"> — 徐培鈞 (2025), 新人日誌.</span>
+          </div>
+          <a class="inline-flex items-center justify-center rounded-xl border border-cyanGlow/40 bg-cyanGlow/10 px-3 py-1.5 text-xs font-bold text-cyanGlow transition hover:bg-cyanGlow/20 hover:shadow-glow" target="_blank" rel="noreferrer" href="https://realnewbie.com/posts/what-is-oauth-2-0-understanding-third-party-login-mechanism">瀏覽文獻 ↗</a>
+        </li>
+        <li id="ref-13" class="glass-card scroll-mt-28 flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/5 p-5 md:flex-row md:items-center md:justify-between">
+          <div>
+            <span class="mr-2 font-black text-cyanGlow">[13]</span>
+            <span class="font-bold text-softText">開放銀行邁向第二階段——OPEN API 技術合規與測試說明會</span>
+            <span class="text-slate-400"> — 施鑫澤、楊迺仁 (2020), CIO Taiwan.</span>
+          </div>
+          <a class="inline-flex items-center justify-center rounded-xl border border-cyanGlow/40 bg-cyanGlow/10 px-3 py-1.5 text-xs font-bold text-cyanGlow transition hover:bg-cyanGlow/20 hover:shadow-glow" target="_blank" rel="noreferrer" href="https://www.cio.com.tw/open-bank-towards-phase-2-open-api-technical-compliance-and-test-description/">瀏覽文獻 ↗</a>
+        </li>
+        <li id="ref-14" class="glass-card scroll-mt-28 flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/5 p-5 md:flex-row md:items-center md:justify-between">
+          <div>
+            <span class="mr-2 font-black text-cyanGlow">[14]</span>
+            <span class="font-bold text-softText">駭客利用偽造 OAuth 應用程式繞過 MFA，成功率超過 50%</span>
+            <span class="text-slate-400"> — 資安人新聞編輯部 (2025).</span>
+          </div>
+          <a class="inline-flex items-center justify-center rounded-xl border border-cyanGlow/40 bg-cyanGlow/10 px-3 py-1.5 text-xs font-bold text-cyanGlow transition hover:bg-cyanGlow/20 hover:shadow-glow" target="_blank" rel="noreferrer" href="https://www.informationsecurity.com.tw/article/article_detail.aspx?aid=12096">瀏覽文獻 ↗</a>
+        </li>
+        <li id="ref-15" class="glass-card scroll-mt-28 flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/5 p-5 md:flex-row md:items-center md:justify-between">
+          <div>
+            <span class="mr-2 font-black text-cyanGlow">[15]</span>
+            <span class="font-bold text-softText">了解 OAuth 新手指南：掌握安全認證的基礎知識</span>
+            <span class="text-slate-400"> — Carger (2024), 卡哥小技倆.</span>
+          </div>
+          <a class="inline-flex items-center justify-center rounded-xl border border-cyanGlow/40 bg-cyanGlow/10 px-3 py-1.5 text-xs font-bold text-cyanGlow transition hover:bg-cyanGlow/20 hover:shadow-glow" target="_blank" rel="noreferrer" href="https://carger.tips/%E4%BA%86%E8%A7%A3oauth-%E6%96%B0%E6%89%8B%E6%8C%87%E5%8D%97-%E6%8E%8C%E6%8F%A1%E5%AE%89%E5%85%A8%E8%AA%8D%E8%AD%89%E7%9A%84%E5%9F%BA%E7%A4%8E%E7%9F%A5%E8%AD%98#%E9%98%B2%E6%AD%A2%E5%B8%B8%E8%A6%8B%E6%94%BB%E6%93%8A">瀏覽文獻 ↗</a>
+        </li>
+        <li id="ref-16" class="glass-card scroll-mt-28 flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/5 p-5 md:flex-row md:items-center md:justify-between">
+          <div>
+            <span class="mr-2 font-black text-cyanGlow">[16]</span>
+            <span class="font-bold text-softText">OAuth 2.0 安全最佳實務：PKCE、state 參數與更多</span>
+            <span class="text-slate-400"> — Authgear (2026).</span>
+          </div>
+          <a class="inline-flex items-center justify-center rounded-xl border border-cyanGlow/40 bg-cyanGlow/10 px-3 py-1.5 text-xs font-bold text-cyanGlow transition hover:bg-cyanGlow/20 hover:shadow-glow" target="_blank" rel="noreferrer" href="https://www.authgear.com/zh-hant/post/oauth2-security-best-practices-pkce-state/">瀏覽文獻 ↗</a>
+        </li>
+      </ol>
+    </section>
+  </main>
+
+  <footer class="relative z-10 border-t border-white/10 px-5 py-8 text-center text-sm text-slate-400">
+    Cyber Security Final Report · OAuth 2.0 Introduction
+  </footer>
+
+  <script>
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('active');
+        }
+      });
+    }, { threshold: 0.1 });
+
+    document.querySelectorAll('.scroll-reveal').forEach(el => observer.observe(el));
+
+    const demoBtn = document.getElementById('flow-demo-btn');
+    const demoSteps = [
+      document.getElementById('demo-step-1'),
+      document.getElementById('demo-step-2'),
+      document.getElementById('demo-step-3')
+    ];
+    const tokenEl = document.getElementById('demo-token');
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const stepDelay = reduceMotion ? 0 : 900;
+    const transitionDelay = reduceMotion ? 0 : 600;
+
+    function generateMockToken() {
+      const body = Array.from({ length: 2 }, () => Math.random().toString(36).slice(2, 15)).join('.');
+      const access = 'eyJ' + Math.random().toString(36).slice(2, 15) + '...' + Math.random().toString(36).slice(2, 10);
+      const token = {
+        access_token: access,
+        token_type: 'Bearer',
+        expires_in: 3600,
+        scope: 'profile email',
+        refresh_token: body + Math.random().toString(36).slice(2, 8)
+      };
+      return JSON.stringify(token, null, 2);
+    }
+
+    function resetDemo() {
+      demoSteps.forEach(step => step.classList.remove('active'));
+    }
+
+    if (demoBtn && demoSteps.every(Boolean) && tokenEl) {
+      demoBtn.addEventListener('click', () => {
+        resetDemo();
+        setTimeout(() => demoSteps[0].classList.add('active'), 0);
+        setTimeout(() => {
+          tokenEl.textContent = generateMockToken();
+          demoSteps[1].classList.add('active');
+        }, stepDelay);
+        setTimeout(() => demoSteps[2].classList.add('active'), stepDelay * 2);
+        if (reduceMotion) {
+          setTimeout(resetDemo, 1500);
+        } else {
+          setTimeout(resetDemo, stepDelay * 3 + transitionDelay);
+        }
+      });
+    }
+
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        background: '#0a192f',
+        primaryColor: '#00d4ff',
+        primaryTextColor: '#0a192f',
+        primaryBorderColor: '#b8f3ff',
+        lineColor: '#00d4ff',
+        secondaryColor: '#39ff14',
+        tertiaryColor: '#ff4d4d',
+        fontFamily: 'Inter, Noto Sans TC, sans-serif'
+      }
+    });
+  </script>
+</body>
+</html>
